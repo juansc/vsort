@@ -32,6 +32,33 @@ impl<'a> Iterator for VersionSortChunkIterator<'a> {
     }
 }
 
+fn with_iterator(a: &str, b: &str) -> Ordering {
+    let mut a_iter = VersionSortChunkIterator::new(a);
+    let mut b_iter = VersionSortChunkIterator::new(b);
+    loop {
+        let a_chunk = a_iter.next();
+        let b_chunk = b_iter.next();
+        // If both are empty they are equal.
+        if a_chunk.is_none() && b_chunk.is_none() {
+            return Ordering::Equal;
+        }
+        // We can't exit early because "~" will beat out the empty string. In this case we
+        // create a default value for each chunk.
+        let (a_str, a_digits) = a_chunk.map_or(("", 0), |a_out| a_out);
+        let (b_str, b_digits) = b_chunk.map_or(("", 0), |b_out| b_out);
+
+        let cmp = compare_non_digit_seq(a_str, b_str);
+        if cmp != Ordering::Equal {
+            return cmp;
+        }
+        let cmp = a_digits.cmp(&b_digits);
+        if cmp != Ordering::Equal {
+            return cmp;
+        }
+    }
+}
+
+/*
 fn original_implementation(a: &str, b: &str) -> Ordering {
     let mut a_str = a;
     let mut b_str = b;
@@ -60,44 +87,17 @@ fn original_implementation(a: &str, b: &str) -> Ordering {
         if a_str.is_empty() && b_str.is_empty() {
             return Ordering::Equal;
         }
-        if a_str.is_empty() {
-            return Ordering::Less;
-        }
-        if b_str.is_empty() {
-            return Ordering::Greater;
-        }
     }
 }
+ */
 
-fn with_iterator(a: &str, b: &str) -> Ordering {
-    let mut a_iter = VersionSortChunkIterator::new(a);
-    let mut b_iter = VersionSortChunkIterator::new(b);
-    loop {
-        let a_chunk = a_iter.next();
-        let b_chunk = b_iter.next();
-        // If both are empty they are equal.
-        if a_chunk.is_none() && b_chunk.is_none() {
-            return Ordering::Equal;
-        }
-        // We can't end early because "~" will beat out the empty string. In this case we
-        // create a default value.
-        let (a_str, a_digits) = a_chunk.map_or(("", 0), |a_out| a_out);
-        let (b_str, b_digits) = b_chunk.map_or(("", 0), |b_out| b_out);
 
-        let cmp = compare_non_digit_seq(a_str, b_str);
-        if cmp != Ordering::Equal {
-            return cmp;
-        }
-        let cmp = a_digits.cmp(&b_digits);
-        if cmp != Ordering::Equal {
-            return cmp;
-        }
-    }
+fn compare_version_sort(a: &str, b: &str) -> Ordering {
+    with_iterator(a, b)
 }
 
-pub fn compare_version_sort(a: &str, b: &str) -> Ordering {
-    original_implementation(a, b)
-    //with_iterator(a, b)
+pub fn sort(arr: &mut [&str]) {
+    arr.sort_by(|a, b| compare(a, b));
 }
 
 /// compare implements GNU version-sort.
@@ -246,11 +246,11 @@ mod test {
     #[test]
     fn test_empty_string_vs_tilde() {
         let mut original_list = vec!["", "~"];
-        original_list.sort_by(|a, b| compare(a, b));
+        sort(&mut original_list);
         assert_eq!(original_list, vec!["~", ""],);
 
         let mut original_list = vec!["~", ""];
-        original_list.sort_by(|a, b| compare(a, b));
+        sort(&mut original_list);
         assert_eq!(original_list, vec!["~", ""],);
     }
 
@@ -291,7 +291,7 @@ mod test {
         let mut list = vec![
             "a.txt", "b 1.txt", "b 10.txt", "b 11.txt", "b 5.txt", "Ssm.txt",
         ];
-        list.sort_by(|a, b| compare(a, b));
+        sort(&mut list);
 
         assert_eq!(
             list,
@@ -313,8 +313,7 @@ mod test {
             "file_A1.txt",
             "file_001.txt",
         ];
-
-        list.sort_by(|a, b| compare(a, b));
+        sort(&mut list);
 
         assert_eq!(
             list,
@@ -367,7 +366,7 @@ mod test {
             "data_8.txt",
             "data_9.txt",
         ];
-        original_list.sort_by(|a, b| compare(a, b));
+        sort(&mut original_list);
         assert_eq!(
             original_list,
             vec![
@@ -493,7 +492,7 @@ mod test {
             "fileb202.txt",
             "fileb1002.txt",
         ];
-        original_list.sort_by(|a, b| compare(a, b));
+        sort(&mut original_list);
         assert_eq!(
             original_list,
             vec![
@@ -588,7 +587,7 @@ mod test {
     #[test]
     fn test_with_non_utf8() {
         let mut original_list = vec!["αβγ2.txt", "αβγ1.txt", "1αβγ.txt", "2αβγ.txt"];
-        original_list.sort_by(|a, b| compare(a, b));
+        sort(&mut original_list);
 
         assert_eq!(
             original_list,
@@ -609,12 +608,12 @@ mod test {
     #[test]
     fn test_missing_number_part() {
         let mut original_list = vec!["file.txt", "file0.txt"];
-        original_list.sort_by(|a, b| compare(a, b));
+        sort(&mut original_list);
 
         assert_eq!(original_list, vec!["file0.txt", "file.txt"],);
 
         let mut original_list = vec!["file0.txt", "file.txt"];
-        original_list.sort_by(|a, b| compare(a, b));
+        sort(&mut original_list);
 
         assert_eq!(original_list, vec!["file0.txt", "file.txt"],);
     }

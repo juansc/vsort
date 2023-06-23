@@ -2,21 +2,50 @@ use core::cmp::{Ordering, PartialOrd};
 
 use regex::Regex;
 
-pub fn compare_version_sort(a: &str, b: &str) -> Ordering {
-    let mut remainder_a = a;
-    let mut remainder_b = b;
+// VersionSortChunkIterator that iterates over a &str and returns a tuple
+// of (&str, u64).
+struct VersionSortChunkIterator<'a> {
+    remainder: &'a str,
+}
+
+impl<'a> VersionSortChunkIterator<'a> {
+    fn new(s: &'a str) -> Self {
+        Self { remainder: s }
+    }
+}
+
+// Implement an iterator for VersionSortChunkIterator
+impl<'a> Iterator for VersionSortChunkIterator<'a> {
+    type Item = (&'a str, u64);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.remainder.is_empty() {
+            return None;
+        }
+        let (non_digit_part, out) = non_digit_seq(self.remainder);
+        let (digit_part, out) = digit_seq(out);
+        // According to the original spec a missing numerical part also counts as zero.
+        let digits = digit_part.parse::<u64>().unwrap_or_default();
+
+        self.remainder = out;
+        Some((non_digit_part, digits))
+    }
+}
+
+fn original_implementation(a: &str, b: &str) -> Ordering {
+    let mut a_str = a;
+    let mut b_str = b;
     loop {
-        let (a_non_digit_part, out_a) = non_digit_seq(remainder_a);
-        let (b_non_digit_part, out_b) = non_digit_seq(remainder_b);
+        let (a_non_digit_part, remaining_a) = non_digit_seq(a_str);
+        let (b_non_digit_part, remaining_b) = non_digit_seq(b_str);
         let cmp = compare_non_digit_seq(a_non_digit_part, b_non_digit_part);
         if cmp != Ordering::Equal {
             return cmp;
         }
-        remainder_a = out_a;
-        remainder_b = out_b;
-        let (a_digit_part, out_a) = digit_seq(remainder_a);
-        let (b_digit_part, out_b) = digit_seq(remainder_b);
+        let (a_digit_part, remaining_a) = digit_seq(remaining_a);
+        let (b_digit_part, remaining_b) = digit_seq(remaining_b);
 
+        // According to the docs, a missing numerical part also counts as zero.
         let a_digits = a_digit_part.parse::<u64>().unwrap_or_default();
         let b_digits = b_digit_part.parse::<u64>().unwrap_or_default();
         let cmp = a_digits.cmp(&b_digits);
@@ -24,20 +53,51 @@ pub fn compare_version_sort(a: &str, b: &str) -> Ordering {
             return cmp;
         }
 
-        remainder_a = out_a;
-        remainder_b = out_b;
+        a_str = remaining_a;
+        b_str = remaining_b;
 
         // If any or both strings have been exhausted we can determine the ordering.
-        if remainder_a.is_empty() && remainder_b.is_empty() {
+        if a_str.is_empty() && b_str.is_empty() {
             return Ordering::Equal;
         }
-        if remainder_a.is_empty() {
+        if a_str.is_empty() {
             return Ordering::Less;
         }
-        if remainder_b.is_empty() {
+        if b_str.is_empty() {
             return Ordering::Greater;
         }
     }
+}
+
+fn with_iterator(a: &str, b: &str) -> Ordering {
+    let mut a_iter = VersionSortChunkIterator::new(a);
+    let mut b_iter = VersionSortChunkIterator::new(b);
+    loop {
+        let a_chunk = a_iter.next();
+        let b_chunk = b_iter.next();
+        // If both are empty they are equal.
+        if a_chunk.is_none() && b_chunk.is_none() {
+            return Ordering::Equal;
+        }
+        // We can't end early because "~" will beat out the empty string. In this case we
+        // create a default value.
+        let (a_str, a_digits) = a_chunk.map_or(("", 0), |a_out| a_out);
+        let (b_str, b_digits) = b_chunk.map_or(("", 0), |b_out| b_out);
+
+        let cmp = compare_non_digit_seq(a_str, b_str);
+        if cmp != Ordering::Equal {
+            return cmp;
+        }
+        let cmp = a_digits.cmp(&b_digits);
+        if cmp != Ordering::Equal {
+            return cmp;
+        }
+    }
+}
+
+pub fn compare_version_sort(a: &str, b: &str) -> Ordering {
+    original_implementation(a, b)
+    //with_iterator(a, b)
 }
 
 /// compare implements GNU version-sort.
@@ -181,6 +241,17 @@ mod test {
             ("gcc-c++-10.8.12-0.7rc2", ".fc9.tar.bz2")
         );
         assert_eq!(split_extension(".autom4te.cfg"), ("", ".autom4te.cfg"));
+    }
+
+    #[test]
+    fn test_empty_string_vs_tilde() {
+        let mut original_list = vec!["", "~"];
+        original_list.sort_by(|a, b| compare(a, b));
+        assert_eq!(original_list, vec!["~", ""],);
+
+        let mut original_list = vec!["~", ""];
+        original_list.sort_by(|a, b| compare(a, b));
+        assert_eq!(original_list, vec!["~", ""],);
     }
 
     #[test]
@@ -523,5 +594,28 @@ mod test {
             original_list,
             vec!["1αβγ.txt", "2αβγ.txt", "αβγ1.txt", "αβγ2.txt",],
         );
+    }
+
+    #[test]
+    fn test_chunk_iterator() {
+        let mut iter = VersionSortChunkIterator::new("a1b2c3d");
+        assert_eq!(iter.next(), Some(("a", 1)));
+        assert_eq!(iter.next(), Some(("b", 2)));
+        assert_eq!(iter.next(), Some(("c", 3)));
+        assert_eq!(iter.next(), Some(("d", 0)));
+        assert_eq!(iter.next(), None);
+    }
+
+    #[test]
+    fn test_missing_number_part() {
+        let mut original_list = vec!["file.txt", "file0.txt"];
+        original_list.sort_by(|a, b| compare(a, b));
+
+        assert_eq!(original_list, vec!["file0.txt", "file.txt"],);
+
+        let mut original_list = vec!["file0.txt", "file.txt"];
+        original_list.sort_by(|a, b| compare(a, b));
+
+        assert_eq!(original_list, vec!["file0.txt", "file.txt"],);
     }
 }

@@ -91,7 +91,6 @@ fn original_implementation(a: &str, b: &str) -> Ordering {
 }
  */
 
-
 fn compare_version_sort(a: &str, b: &str) -> Ordering {
     with_iterator(a, b)
 }
@@ -223,35 +222,17 @@ fn digit_seq(a: &str) -> (&str, &str) {
 
 #[cfg(test)]
 mod test {
+    use test_case::test_case;
+
     use super::*;
 
-    #[test]
-    fn test_split_extension() {
-        // Examples from https://github.com/coreutils/coreutils/blob/master/doc/sort-version.texi
-        assert_eq!(split_extension("hello-8.txt"), ("hello-8", ".txt"));
-        assert_eq!(split_extension("hello-8.2.txt"), ("hello-8.2", ".txt"));
-        assert_eq!(
-            split_extension("hello-8.0.12.tar.gz"),
-            ("hello-8.0.12", ".tar.gz")
-        );
-        assert_eq!(split_extension("hello-8.2"), ("hello-8.2", ""));
-        assert_eq!(split_extension("hello.foobar65"), ("hello", ".foobar65"));
-        assert_eq!(
-            split_extension("gcc-c++-10.8.12-0.7rc2.fc9.tar.bz2"),
-            ("gcc-c++-10.8.12-0.7rc2", ".fc9.tar.bz2")
-        );
-        assert_eq!(split_extension(".autom4te.cfg"), ("", ".autom4te.cfg"));
-    }
 
-    #[test]
-    fn test_empty_string_vs_tilde() {
-        let mut original_list = vec!["", "~"];
-        sort(&mut original_list);
-        assert_eq!(original_list, vec!["~", ""],);
-
-        let mut original_list = vec!["~", ""];
-        sort(&mut original_list);
-        assert_eq!(original_list, vec!["~", ""],);
+    #[test_case(vec!["", "~"], vec!["~", ""] ; "in sorted order")]
+    #[test_case(vec!["~", ""], vec!["~", ""] ; "in reversed order")]
+    fn test_empty_string_vs_tilde(original: Vec<&str>, expected: Vec<&str>) {
+        let mut list = original;
+        sort(&mut list);
+        assert_eq!(list, expected);
     }
 
     #[test]
@@ -584,15 +565,16 @@ mod test {
         );
     }
 
-    #[test]
-    fn test_with_non_utf8() {
-        let mut original_list = vec!["αβγ2.txt", "αβγ1.txt", "1αβγ.txt", "2αβγ.txt"];
-        sort(&mut original_list);
-
-        assert_eq!(
-            original_list,
-            vec!["1αβγ.txt", "2αβγ.txt", "αβγ1.txt", "αβγ2.txt",],
-        );
+    // This tests that the implementation can handle characters that are longer than a single byte.
+    #[test_case(
+      vec!["αβγ2.txt", "αβγ1.txt", "1αβγ.txt", "2αβγ.txt"],
+      vec!["1αβγ.txt", "2αβγ.txt", "αβγ1.txt", "αβγ2.txt"] ;
+      "test_with_non_ascii"
+    )]
+    fn test_with_non_utf8(original: Vec<&str>, expected: Vec<&str>) {
+        let mut list = original;
+        sort(&mut list);
+        assert_eq!(list, expected);
     }
 
     #[test]
@@ -616,5 +598,51 @@ mod test {
         sort(&mut original_list);
 
         assert_eq!(original_list, vec!["file0.txt", "file.txt"],);
+    }
+
+    #[test_case(
+      vec!["aa", "az", "aα", "a%"],
+      vec!["aa", "az", "a%", "aα"] ;
+      "sorts by byte value"
+    )]
+    fn test_byte_by_byte_comparison_from_docs(original: Vec<&str>, expected: Vec<&str>) {
+        let mut list = original;
+        sort(&mut list);
+        assert_eq!(list, expected);
+    }
+
+    // Coreutils Tests
+    // These tests are lifted from https://github.com/coreutils/coreutils/blob/master/doc/sort-version.texi
+    // They are used in the spec to clarify some sorting rules. They seemed useful enough to add here.
+
+    // https://github.com/coreutils/coreutils/blob/master/doc/sort-version.texi#L265-L285
+    #[test_case(
+      vec!["8.10", "8.5", "8.1", "8.01", "8.010", "8.100", "8.49"],
+      vec!["8.01", "8.1", "8.5", "8.010", "8.10", "8.49", "8.100"] ;
+      "sort with numbers"
+    )]
+    fn test_version_sort_with_numbers(original: Vec<&str>, expected: Vec<&str>) {
+        let mut list = original;
+        sort(&mut list);
+        assert_eq!(list, expected);
+    }
+
+    fn test_punctuation_sort(original: Vec<&str>, expected: Vec<&str>) {
+    }
+
+    // Examples from https://github.com/coreutils/coreutils/blob/master/doc/sort-version.texi#L608-L634
+    #[test_case("hello-8.txt",  ("hello-8", ".txt") ; "basic")]
+    #[test_case("hello-8.2.txt",  ("hello-8.2", ".txt") ; "with major and minor")]
+    #[test_case("hello-8.0.12.tar.gz", ("hello-8.0.12", ".tar.gz") ; "with extension")]
+    #[test_case("hello-8.2",  ("hello-8.2", "") ; "without extension")]
+    #[test_case("hello.foobar65", ("hello", ".foobar65") ; "with long extension")]
+    #[test_case(
+      "gcc-c++-10.8.12-0.7rc2.fc9.tar.bz2",
+      ("gcc-c++-10.8.12-0.7rc2", ".fc9.tar.bz2") ;
+      "with multiple extensions"
+    )]
+    #[test_case(".autom4te.cfg", ("", ".autom4te.cfg") ; "empty name with extension")]
+    fn test_split_extension(input: &str, split: (&str, &str)) {
+        assert_eq!(split_extension(input), split);
     }
 }

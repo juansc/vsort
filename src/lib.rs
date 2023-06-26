@@ -99,8 +99,47 @@ pub fn sort(arr: &mut [&str]) {
     arr.sort_by(|a, b| compare(a, b));
 }
 
+fn do_check(a: &str, b: &str, check: fn(&str) -> bool) -> Option<Ordering> {
+    match (check(a), check(b)) {
+        (true, true) => Some(Ordering::Equal),
+        (true, false) => Some(Ordering::Less),
+        (false, true) => Some(Ordering::Greater),
+        (false, false) => None,
+    }
+}
+
 /// compare implements GNU version-sort.
 pub fn compare(a: &str, b: &str) -> Ordering {
+    // The spec says that the empty string, ".", and ".." are special cases that come
+    // before all other strings.
+    if let Some(cmp) = do_check(a, b, str::is_empty) {
+        return cmp;
+    }
+    if let Some(cmp) = do_check(a, b, |s| s == ".") {
+        return cmp;
+    }
+    if let Some(cmp) = do_check(a, b, |s| s == "..") {
+        return cmp;
+    }
+
+    if a.starts_with('.') && !b.starts_with('.') {
+        return Ordering::Less;
+    }
+    if !a.starts_with('.') && b.starts_with('.') {
+        return Ordering::Greater;
+    }
+
+    if a.starts_with('.') && b.starts_with('.') {
+        let new_a = if a.len() == 1 { "" } else { &a[1..] };
+        let new_b = if b.len() == 1 { "" } else { &b[1..] };
+        return simple_cmp(new_a, new_b);
+    }
+
+    // They are regular strings so we can use the regular rules
+    simple_cmp(a, b)
+}
+
+fn simple_cmp(a: &str, b: &str) -> Ordering {
     // Compare without the file extensions
     let cmp = compare_version_sort(split_extension(a).0, split_extension(b).0);
     if cmp != Ordering::Equal {
@@ -210,14 +249,12 @@ fn compare_non_digit_seq(a: &str, b: &str) -> Ordering {
 fn non_digit_seq(a: &str) -> (&str, &str) {
     a.char_indices()
         .find(|(_, c)| c.is_ascii_digit())
-        .map(|(index, _)| a.split_at(index))
-        .unwrap_or((a, ""))
+        .map_or((a, ""), |(index, _)| a.split_at(index))
 }
 fn digit_seq(a: &str) -> (&str, &str) {
     a.char_indices()
         .find(|(_, c)| !c.is_ascii_digit())
-        .map(|(index, _)| a.split_at(index))
-        .unwrap_or((a, ""))
+        .map_or((a, ""), |(index, _)| a.split_at(index))
 }
 
 #[cfg(test)]
@@ -226,9 +263,8 @@ mod test {
 
     use super::*;
 
-
-    #[test_case(vec!["", "~"], vec!["~", ""] ; "in sorted order")]
-    #[test_case(vec!["~", ""], vec!["~", ""] ; "in reversed order")]
+    #[test_case(vec!["", "~"], vec!["", "~"] ; "in sorted order")]
+    #[test_case(vec!["~", ""], vec!["", "~"] ; "in reversed order")]
     fn test_empty_string_vs_tilde(original: Vec<&str>, expected: Vec<&str>) {
         let mut list = original;
         sort(&mut list);
@@ -243,10 +279,9 @@ mod test {
         assert_eq!(
             list,
             vec![
-                // Absolute shortest comes first
-                "a", // Tilde comes before empty string
-                "aa~", "aa", // ASCII letters come before other bytes
-                "aaa", "aab", "aa&", "aa_",
+                "a", // Absolute shortest comes first
+                "aa~", "aa", // Tilde comes before empty string
+                "aaa", "aab", "aa&", "aa_", // ASCII letters come before other bytes
             ]
         );
     }
@@ -277,291 +312,6 @@ mod test {
         assert_eq!(
             list,
             vec!["Ssm.txt", "a.txt", "b 1.txt", "b 5.txt", "b 10.txt", "b 11.txt"]
-        );
-    }
-
-    #[test]
-    fn test_small_list() {
-        let mut list = vec![
-            "file_1.txt",
-            "file_10.txt",
-            "file_2.txt",
-            "file_20.txt",
-            "file_11.txt",
-            "file_1a.txt",
-            "file_1B.txt",
-            "file_a1.txt",
-            "file_A1.txt",
-            "file_001.txt",
-        ];
-        sort(&mut list);
-
-        assert_eq!(
-            list,
-            vec![
-                "file_001.txt",
-                "file_1.txt",
-                "file_1B.txt",
-                "file_1a.txt",
-                "file_2.txt",
-                "file_10.txt",
-                "file_11.txt",
-                "file_20.txt",
-                "file_A1.txt",
-                "file_a1.txt",
-            ]
-        );
-    }
-
-    #[test]
-    fn test_underscores_with_numbers() {
-        let mut original_list = vec![
-            "data_1.txt",
-            "data_10.txt",
-            "data_11.txt",
-            "data_12.txt",
-            "data_13.txt",
-            "data_14.txt",
-            "data_15.txt",
-            "data_16.txt",
-            "data_17.txt",
-            "data_18.txt",
-            "data_19.txt",
-            "data_2.txt",
-            "data_20.txt",
-            "data_21.txt",
-            "data_22.txt",
-            "data_23.txt",
-            "data_24.txt",
-            "data_25.txt",
-            "data_26.txt",
-            "data_27.txt",
-            "data_28.txt",
-            "data_29.txt",
-            "data_3.txt",
-            "data_30.txt",
-            "data_4.txt",
-            "data_5.txt",
-            "data_6.txt",
-            "data_7.txt",
-            "data_8.txt",
-            "data_9.txt",
-        ];
-        sort(&mut original_list);
-        assert_eq!(
-            original_list,
-            vec![
-                "data_1.txt",
-                "data_2.txt",
-                "data_3.txt",
-                "data_4.txt",
-                "data_5.txt",
-                "data_6.txt",
-                "data_7.txt",
-                "data_8.txt",
-                "data_9.txt",
-                "data_10.txt",
-                "data_11.txt",
-                "data_12.txt",
-                "data_13.txt",
-                "data_14.txt",
-                "data_15.txt",
-                "data_16.txt",
-                "data_17.txt",
-                "data_18.txt",
-                "data_19.txt",
-                "data_20.txt",
-                "data_21.txt",
-                "data_22.txt",
-                "data_23.txt",
-                "data_24.txt",
-                "data_25.txt",
-                "data_26.txt",
-                "data_27.txt",
-                "data_28.txt",
-                "data_29.txt",
-                "data_30.txt",
-            ],
-        );
-    }
-
-    #[test]
-    fn test_large_list() {
-        let mut original_list = vec![
-            "file1.txt",
-            "file2.txt",
-            "file3.txt",
-            "file10.txt",
-            "file10a.txt",
-            "file10b.txt",
-            "file10c.txt",
-            "file11.txt",
-            "file12.txt",
-            "file1a.txt",
-            "file1b.txt",
-            "file1c.txt",
-            "file20.txt",
-            "file200.txt",
-            "file2000.txt",
-            "file2001.txt",
-            "file201.txt",
-            "file21.txt",
-            "file22.txt",
-            "file100.txt",
-            "file1000.txt",
-            "file101.txt",
-            "file1002.txt",
-            "file102.txt",
-            "file2002.txt",
-            "file202.txt",
-            "file1001.txt",
-            "fileA.txt",
-            "fileB.txt",
-            "fileC.txt",
-            "filea1.txt",
-            "filea2.txt",
-            "filea3.txt",
-            "filea10.txt",
-            "filea10b.txt",
-            "filea10c.txt",
-            "filea12.txt",
-            "filea20.txt",
-            "filea100.txt",
-            "filea200.txt",
-            "filea1000.txt",
-            "filea1001.txt",
-            "filea101.txt",
-            "filea1002.txt",
-            "filea102.txt",
-            "filea10a.txt",
-            "filea11.txt",
-            "filea1a.txt",
-            "filea1b.txt",
-            "filea1c.txt",
-            "filea2000.txt",
-            "filea2001.txt",
-            "filea201.txt",
-            "filea21.txt",
-            "filea2002.txt",
-            "filea202.txt",
-            "filea22.txt",
-            "fileaA.txt",
-            "fileaB.txt",
-            "fileaC.txt",
-            "fileb1.txt",
-            "fileb2.txt",
-            "fileb3.txt",
-            "fileb10.txt",
-            "fileb100.txt",
-            "fileb101.txt",
-            "fileb102.txt",
-            "fileb10a.txt",
-            "fileb10b.txt",
-            "fileb10c.txt",
-            "fileb11.txt",
-            "fileb12.txt",
-            "fileb20.txt",
-            "fileb200.txt",
-            "fileb1001.txt",
-            "fileb2000.txt",
-            "fileb2001.txt",
-            "fileb201.txt",
-            "fileb21.txt",
-            "fileb22.txt",
-            "fileb1000.txt",
-            "fileb2002.txt",
-            "fileb202.txt",
-            "fileb1002.txt",
-        ];
-        sort(&mut original_list);
-        assert_eq!(
-            original_list,
-            vec![
-                "file1.txt",
-                "file1a.txt",
-                "file1b.txt",
-                "file1c.txt",
-                "file2.txt",
-                "file3.txt",
-                "file10.txt",
-                "file10a.txt",
-                "file10b.txt",
-                "file10c.txt",
-                "file11.txt",
-                "file12.txt",
-                "file20.txt",
-                "file21.txt",
-                "file22.txt",
-                "file100.txt",
-                "file101.txt",
-                "file102.txt",
-                "file200.txt",
-                "file201.txt",
-                "file202.txt",
-                "file1000.txt",
-                "file1001.txt",
-                "file1002.txt",
-                "file2000.txt",
-                "file2001.txt",
-                "file2002.txt",
-                "fileA.txt",
-                "fileB.txt",
-                "fileC.txt",
-                "filea1.txt",
-                "filea1a.txt",
-                "filea1b.txt",
-                "filea1c.txt",
-                "filea2.txt",
-                "filea3.txt",
-                "filea10.txt",
-                "filea10a.txt",
-                "filea10b.txt",
-                "filea10c.txt",
-                "filea11.txt",
-                "filea12.txt",
-                "filea20.txt",
-                "filea21.txt",
-                "filea22.txt",
-                "filea100.txt",
-                "filea101.txt",
-                "filea102.txt",
-                "filea200.txt",
-                "filea201.txt",
-                "filea202.txt",
-                "filea1000.txt",
-                "filea1001.txt",
-                "filea1002.txt",
-                "filea2000.txt",
-                "filea2001.txt",
-                "filea2002.txt",
-                "fileaA.txt",
-                "fileaB.txt",
-                "fileaC.txt",
-                "fileb1.txt",
-                "fileb2.txt",
-                "fileb3.txt",
-                "fileb10.txt",
-                "fileb10a.txt",
-                "fileb10b.txt",
-                "fileb10c.txt",
-                "fileb11.txt",
-                "fileb12.txt",
-                "fileb20.txt",
-                "fileb21.txt",
-                "fileb22.txt",
-                "fileb100.txt",
-                "fileb101.txt",
-                "fileb102.txt",
-                "fileb200.txt",
-                "fileb201.txt",
-                "fileb202.txt",
-                "fileb1000.txt",
-                "fileb1001.txt",
-                "fileb1002.txt",
-                "fileb2000.txt",
-                "fileb2001.txt",
-                "fileb2002.txt",
-            ],
         );
     }
 
@@ -600,17 +350,6 @@ mod test {
         assert_eq!(original_list, vec!["file0.txt", "file.txt"],);
     }
 
-    #[test_case(
-      vec!["aa", "az", "aα", "a%"],
-      vec!["aa", "az", "a%", "aα"] ;
-      "sorts by byte value"
-    )]
-    fn test_byte_by_byte_comparison_from_docs(original: Vec<&str>, expected: Vec<&str>) {
-        let mut list = original;
-        sort(&mut list);
-        assert_eq!(list, expected);
-    }
-
     // Coreutils Tests
     // These tests are lifted from https://github.com/coreutils/coreutils/blob/master/doc/sort-version.texi
     // They are used in the spec to clarify some sorting rules. They seemed useful enough to add here.
@@ -621,13 +360,46 @@ mod test {
       vec!["8.01", "8.1", "8.5", "8.010", "8.10", "8.49", "8.100"] ;
       "sort with numbers"
     )]
-    fn test_version_sort_with_numbers(original: Vec<&str>, expected: Vec<&str>) {
+    // https://github.com/coreutils/coreutils/blob/master/doc/sort-version.texi#L316-L335
+    #[test_case(
+      vec!["1.0_src.tar.gz", "1.0.5_src.tar.gz"],
+      vec!["1.0.5_src.tar.gz", "1.0_src.tar.gz"] ;
+      "period is before underscore"
+    )]
+    // https://github.com/coreutils/coreutils/blob/master/doc/sort-version.texi#L353-L363
+    #[test_case(
+      vec!["3.0/", "3.0.5"],
+      vec!["3.0.5", "3.0/"] ;
+      "period is before forward slash"
+    )]
+    // https://github.com/coreutils/coreutils/blob/master/doc/sort-version.texi#L372-L379
+    #[test_case(
+      vec!["a%", "az"],
+      vec!["az", "a%"] ;
+      "letters before non-letters"
+    )]
+    // https://github.com/coreutils/coreutils/blob/master/doc/sort-version.texi#L400-L413
+    #[test_case(
+      vec!["1", "1%", "1.2", "1~", "~"],
+      vec!["~", "1~", "1", "1%", "1.2"] ;
+      "tilde before all others strings"
+    )]
+    // https://github.com/coreutils/coreutils/blob/master/doc/sort-version.texi#L451-L456
+    #[test_case(
+      vec!["aa", "az", "a%", "aα"],
+      vec!["aa", "az", "a%", "aα"] ;
+      "sort ignores locale"
+    )]
+    // https://github.com/coreutils/coreutils/blob/master/doc/sort-version.texi#L551-L560
+    #[test_case(
+      vec!["a", "b", ".", "c", "..", ".d20", ".d3"],
+      vec![".", "..", ".d3", ".d20", "a", "b", "c"] ;
+      "special directories and hidden files are sorted first"
+    )]
+    fn test_basic_tests(original: Vec<&str>, expected: Vec<&str>) {
         let mut list = original;
         sort(&mut list);
         assert_eq!(list, expected);
-    }
-
-    fn test_punctuation_sort(original: Vec<&str>, expected: Vec<&str>) {
     }
 
     // Examples from https://github.com/coreutils/coreutils/blob/master/doc/sort-version.texi#L608-L634
@@ -644,5 +416,109 @@ mod test {
     #[test_case(".autom4te.cfg", ("", ".autom4te.cfg") ; "empty name with extension")]
     fn test_split_extension(input: &str, split: (&str, &str)) {
         assert_eq!(split_extension(input), split);
+    }
+
+
+    // This list is pulled from
+    // https://github.com/coreutils/gnulib/blob/master/tests/test-filevercmp.c#L26-L102
+    #[test]
+    fn test_long_sorted_list() {
+        let expected = vec![
+            "",
+            ".",
+            "..",
+            ".0",
+            ".9",
+            ".A",
+            ".Z",
+            ".a~",
+            ".a",
+            ".b~",
+            ".b",
+            ".z",
+            ".zz~",
+            ".zz",
+            ".zz.~1~",
+            ".zz.0",
+            ".\u{1}",
+            ".\u{1}.txt",
+            ".\u{1}x",
+            ".\u{1}x\u{1}",
+            ".\u{1}.0",
+            "0",
+            "9",
+            "A",
+            "Z",
+            "a~",
+            "a",
+            "a.b~",
+            "a.b",
+            "a.bc~",
+            "a.bc",
+            "a+",
+            "a.",
+            "a..a",
+            "a.+",
+            "b~",
+            "b",
+            "gcc-c++-10.fc9.tar.gz",
+            "gcc-c++-10.fc9.tar.gz.~1~",
+            "gcc-c++-10.fc9.tar.gz.~2~",
+            "gcc-c++-10.8.12-0.7rc2.fc9.tar.bz2",
+            "gcc-c++-10.8.12-0.7rc2.fc9.tar.bz2.~1~",
+            "glibc-2-0.1.beta1.fc10.rpm",
+            "glibc-common-5-0.2.beta2.fc9.ebuild",
+            "glibc-common-5-0.2b.deb",
+            "glibc-common-11b.ebuild",
+            "glibc-common-11-0.6rc2.ebuild",
+            "libstdc++-0.5.8.11-0.7rc2.fc10.tar.gz",
+            "libstdc++-4a.fc8.tar.gz",
+            "libstdc++-4.10.4.20040204svn.rpm",
+            "libstdc++-devel-3.fc8.ebuild",
+            "libstdc++-devel-3a.fc9.tar.gz",
+            "libstdc++-devel-8.fc8.deb",
+            "libstdc++-devel-8.6.2-0.4b.fc8",
+            "nss_ldap-1-0.2b.fc9.tar.bz2",
+            "nss_ldap-1-0.6rc2.fc8.tar.gz",
+            "nss_ldap-1.0-0.1a.tar.gz",
+            "nss_ldap-10beta1.fc8.tar.gz",
+            "nss_ldap-10.11.8.6.20040204cvs.fc10.ebuild",
+            "z",
+            "zz~",
+            "zz",
+            "zz.~1~",
+            "zz.0",
+            "zz.0.txt",
+            "\u{1}",
+            "\u{1}.txt",
+            "\u{1}x",
+            "\u{1}x\u{1}",
+            "\u{1}.0",
+            "#\u{1}.b#",
+            "#.b#",
+        ];
+        let mut list = expected.clone();
+        list.reverse();
+        assert_ne!(list, expected);
+        sort(&mut list);
+        assert_eq!(list, expected);
+    }
+
+    // These tests are lifted from
+    // https://github.com/coreutils/gnulib/blob/master/tests/test-filevercmp.c
+    #[test_case(vec!["a", "a0", "a0000"] ; "zeros are the same as empty string")]
+    #[test_case(vec!["a\u{1}c-27.txt", "a\u{1}c-027.txt", "a\u{1}c-00000000000000000000000000000000000000000000000000000027.txt",] ; "non-ascii")]
+    #[test_case(vec![".a\u{1}c-27.txt", ".a\u{1}c-027.txt", ".a\u{1}c-00000000000000000000000000000000000000000000000000000027.txt",] ; "non-ascii with leading period")]
+    #[test_case(vec!["a\u{1}c-", "a\u{1}c-0", "a\u{1}c-00",] ; "non-ascii without extension")]
+    #[test_case(vec![".a\u{1}c-", ".a\u{1}c-0", ".a\u{1}c-00",] ; "non-ascii without extension and leading period")]
+    #[test_case(vec!["a\u{1}c-0.txt", "a\u{1}c-00.txt"] ; "non-ascii with trailing zeros")]
+    #[test_case(vec![".a\u{1}c-1\u{1}.txt", ".a\u{1}c-001\u{1}.txt"] ; "non-ascii with leading zeros before a number")]
+    fn test_strings_cmp_equal(list: Vec<&str>) {
+        let end = list.len();
+        for i in 0..end {
+            for j in (i + 1)..end {
+                assert_eq!(compare_version_sort(list[i], list[j]), Ordering::Equal);
+            }
+        }
     }
 }

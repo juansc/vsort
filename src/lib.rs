@@ -169,10 +169,10 @@ fn split_extension(s: &str) -> (&str, &str) {
 }
 
 #[derive(Eq)]
-struct VersionSortChar(Option<char>);
+struct VersionSortChar(Option<u8>);
 
-impl From<Option<char>> for VersionSortChar {
-    fn from(c: Option<char>) -> Self {
+impl From<Option<u8>> for VersionSortChar {
+    fn from(c: Option<u8>) -> Self {
         Self(c)
     }
 }
@@ -186,14 +186,14 @@ impl PartialOrd for VersionSortChar {
         match (self.0, other.0) {
             (None, None) => Some(Ordering::Equal),
             (Some(a), None) => {
-                if a == '~' {
+                if a == b'~' {
                     Some(Ordering::Less)
                 } else {
                     Some(Ordering::Greater)
                 }
             }
             (None, Some(b)) => {
-                if b == '~' {
+                if b == b'~' {
                     Some(Ordering::Greater)
                 } else {
                     Some(Ordering::Less)
@@ -203,10 +203,10 @@ impl PartialOrd for VersionSortChar {
                 if a == b {
                     return Some(Ordering::Equal);
                 }
-                if a == '~' {
+                if a == b'~' {
                     return Some(Ordering::Less);
                 }
-                if b == '~' {
+                if b == b'~' {
                     return Some(Ordering::Greater);
                 }
                 match (a.is_ascii_alphabetic(), b.is_ascii_alphabetic()) {
@@ -228,16 +228,16 @@ impl PartialEq for VersionSortChar {
 }
 
 fn compare_non_digit_seq(a: &str, b: &str) -> Ordering {
-    let mut a_chars = a.chars();
-    let mut b_chars = b.chars();
+    let mut a_bytes = a.bytes();
+    let mut b_bytes = b.bytes();
     loop {
-        let a_char = a_chars.next();
-        let b_char = b_chars.next();
-        if a_char.is_none() && b_char.is_none() {
+        let a_byte = a_bytes.next();
+        let b_byte = b_bytes.next();
+        if a_byte.is_none() && b_byte.is_none() {
             return Ordering::Equal;
         }
-        let cmp = VersionSortChar::from(a_char)
-            .partial_cmp(&VersionSortChar::from(b_char))
+        let cmp = VersionSortChar::from(a_byte)
+            .partial_cmp(&VersionSortChar::from(b_byte))
             .unwrap();
         if cmp == Ordering::Equal {
             continue;
@@ -247,12 +247,12 @@ fn compare_non_digit_seq(a: &str, b: &str) -> Ordering {
 }
 
 fn non_digit_seq(a: &str) -> (&str, &str) {
-    a.char_indices()
+    a.bytes().enumerate()
         .find(|(_, c)| c.is_ascii_digit())
         .map_or((a, ""), |(index, _)| a.split_at(index))
 }
 fn digit_seq(a: &str) -> (&str, &str) {
-    a.char_indices()
+    a.bytes().enumerate()
         .find(|(_, c)| !c.is_ascii_digit())
         .map_or((a, ""), |(index, _)| a.split_at(index))
 }

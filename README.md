@@ -29,7 +29,7 @@ fn main() {
     // Pass to sort_by
     file_names.sort_by(|a, b| compare(a, b));
     assert_eq!(
-        list,
+        file_names,
         vec!["Ssm.txt", "a.txt", "b 1.txt", "b 5.txt", "b 10.txt", "b 11.txt"]
     );
 
@@ -43,12 +43,15 @@ fn main() {
     ];
     // Alternatively
     sort(&mut file_names);
-    println!("{:?}", file_names);
+    assert_eq!(
+        file_names,
+        vec!["Ssm.txt", "a.txt", "b 1.txt", "b 5.txt", "b 10.txt", "b 11.txt"]
+    );
 }
 ```
 
 ## TODOs
-
-- [] Remove Regex crate
-- [] Create benchmarks
-- [] Decide on iterator vs non-iterator approach
+- [ ] Add installation instructions
+- [ ] Remove Regex crate
+- [ ] Create benchmarks
+- [ ] Decide on iterator vs non-iterator approach

@@ -2,8 +2,88 @@ use core::cmp::{Ordering, PartialOrd};
 
 use regex::Regex;
 
+/// sort will sort the given array in place using GNU version sort.
+pub fn sort(arr: &mut [&str]) {
+    arr.sort_by(|a, b| compare(a, b));
+}
+
+/// compare implements GNU version-sort.
+pub fn compare(a: &str, b: &str) -> Ordering {
+    // The spec says that the following have special priority and sort before
+    // all other strings, in the listed order: ("", ".", "..").
+    // https://github.com/coreutils/coreutils/blob/master/doc/sort-version.texi#L532-L569
+    if let Some(cmp) = match (a, b) {
+        ("", "") | (".", ".") | ("..", "..") => Some(Ordering::Equal),
+        ("", _) => Some(Ordering::Less),
+        (_, "") => Some(Ordering::Greater),
+        (".", _) => Some(Ordering::Less),
+        (_, ".") => Some(Ordering::Greater),
+        ("..", _) => Some(Ordering::Less),
+        (_, "..") => Some(Ordering::Greater),
+        _ => None,
+    } {
+        return cmp;
+    };
+
+    match (a.starts_with('.'), b.starts_with('.')) {
+        (true, false) => return Ordering::Less,
+        (false, true) => return Ordering::Greater,
+        (true, true) => {
+            let new_a = if a.len() == 1 { "" } else { &a[1..] };
+            let new_b = if b.len() == 1 { "" } else { &b[1..] };
+            return simple_cmp(new_a, new_b);
+        }
+        (false, false) => simple_cmp(a, b)
+    }
+}
+
+fn simple_cmp(a: &str, b: &str) -> Ordering {
+    // Compare without the file extensions
+    let cmp = version_sort_cmp(split_extension(a).0, split_extension(b).0);
+    if cmp != Ordering::Equal {
+        return cmp;
+    }
+    // Compare the original strings with the file extensions
+    let cmp = version_sort_cmp(a, b);
+    if cmp != Ordering::Equal {
+        return cmp;
+    }
+    // At this point the file extensions are the same, so we compare the full strings.
+    // this helps with cases like a0001 and a1 so that they have a consistent ordering.
+    a.cmp(b)
+}
+
+/// version_sort_cmp will compare two strings using GNU version sort.
+fn version_sort_cmp(a: &str, b: &str) -> Ordering {
+    let mut a_iter = VersionSortChunkIterator::new(a);
+    let mut b_iter = VersionSortChunkIterator::new(b);
+    loop {
+        let a_chunk = a_iter.next();
+        let b_chunk = b_iter.next();
+        // If both are empty they are equal.
+        if a_chunk.is_none() && b_chunk.is_none() {
+            return Ordering::Equal;
+        }
+        // We can't exit early because "~" will beat out the empty string. In this case we
+        // create a default value for each chunk.
+        let (a_str, a_digits) = a_chunk.map_or(("", 0), |a_out| a_out);
+        let (b_str, b_digits) = b_chunk.map_or(("", 0), |b_out| b_out);
+
+        let cmp = compare_non_digit_seq(a_str, b_str);
+        if cmp != Ordering::Equal {
+            return cmp;
+        }
+        let cmp = a_digits.cmp(&b_digits);
+        if cmp != Ordering::Equal {
+            return cmp;
+        }
+    }
+}
+
 // VersionSortChunkIterator that iterates over a &str and returns a tuple
-// of (&str, u64).
+// of (&str, u64). Since the version sort algorithm breaks down strings into
+// consecutive non-digit and digit parts, this iterator will return the next
+// relevant sections.
 struct VersionSortChunkIterator<'a> {
     remainder: &'a str,
 }
@@ -30,129 +110,6 @@ impl<'a> Iterator for VersionSortChunkIterator<'a> {
         self.remainder = out;
         Some((non_digit_part, digits))
     }
-}
-
-fn with_iterator(a: &str, b: &str) -> Ordering {
-    let mut a_iter = VersionSortChunkIterator::new(a);
-    let mut b_iter = VersionSortChunkIterator::new(b);
-    loop {
-        let a_chunk = a_iter.next();
-        let b_chunk = b_iter.next();
-        // If both are empty they are equal.
-        if a_chunk.is_none() && b_chunk.is_none() {
-            return Ordering::Equal;
-        }
-        // We can't exit early because "~" will beat out the empty string. In this case we
-        // create a default value for each chunk.
-        let (a_str, a_digits) = a_chunk.map_or(("", 0), |a_out| a_out);
-        let (b_str, b_digits) = b_chunk.map_or(("", 0), |b_out| b_out);
-
-        let cmp = compare_non_digit_seq(a_str, b_str);
-        if cmp != Ordering::Equal {
-            return cmp;
-        }
-        let cmp = a_digits.cmp(&b_digits);
-        if cmp != Ordering::Equal {
-            return cmp;
-        }
-    }
-}
-
-/*
-fn original_implementation(a: &str, b: &str) -> Ordering {
-    let mut a_str = a;
-    let mut b_str = b;
-    loop {
-        let (a_non_digit_part, remaining_a) = non_digit_seq(a_str);
-        let (b_non_digit_part, remaining_b) = non_digit_seq(b_str);
-        let cmp = compare_non_digit_seq(a_non_digit_part, b_non_digit_part);
-        if cmp != Ordering::Equal {
-            return cmp;
-        }
-        let (a_digit_part, remaining_a) = digit_seq(remaining_a);
-        let (b_digit_part, remaining_b) = digit_seq(remaining_b);
-
-        // According to the docs, a missing numerical part also counts as zero.
-        let a_digits = a_digit_part.parse::<u64>().unwrap_or_default();
-        let b_digits = b_digit_part.parse::<u64>().unwrap_or_default();
-        let cmp = a_digits.cmp(&b_digits);
-        if cmp != Ordering::Equal {
-            return cmp;
-        }
-
-        a_str = remaining_a;
-        b_str = remaining_b;
-
-        // If any or both strings have been exhausted we can determine the ordering.
-        if a_str.is_empty() && b_str.is_empty() {
-            return Ordering::Equal;
-        }
-    }
-}
- */
-
-fn compare_version_sort(a: &str, b: &str) -> Ordering {
-    with_iterator(a, b)
-}
-
-pub fn sort(arr: &mut [&str]) {
-    arr.sort_by(|a, b| compare(a, b));
-}
-
-fn do_check(a: &str, b: &str, check: fn(&str) -> bool) -> Option<Ordering> {
-    match (check(a), check(b)) {
-        (true, true) => Some(Ordering::Equal),
-        (true, false) => Some(Ordering::Less),
-        (false, true) => Some(Ordering::Greater),
-        (false, false) => None,
-    }
-}
-
-/// compare implements GNU version-sort.
-pub fn compare(a: &str, b: &str) -> Ordering {
-    // The spec says that the empty string, ".", and ".." are special cases that come
-    // before all other strings.
-    if let Some(cmp) = do_check(a, b, str::is_empty) {
-        return cmp;
-    }
-    if let Some(cmp) = do_check(a, b, |s| s == ".") {
-        return cmp;
-    }
-    if let Some(cmp) = do_check(a, b, |s| s == "..") {
-        return cmp;
-    }
-
-    if a.starts_with('.') && !b.starts_with('.') {
-        return Ordering::Less;
-    }
-    if !a.starts_with('.') && b.starts_with('.') {
-        return Ordering::Greater;
-    }
-
-    if a.starts_with('.') && b.starts_with('.') {
-        let new_a = if a.len() == 1 { "" } else { &a[1..] };
-        let new_b = if b.len() == 1 { "" } else { &b[1..] };
-        return simple_cmp(new_a, new_b);
-    }
-
-    // They are regular strings so we can use the regular rules
-    simple_cmp(a, b)
-}
-
-fn simple_cmp(a: &str, b: &str) -> Ordering {
-    // Compare without the file extensions
-    let cmp = compare_version_sort(split_extension(a).0, split_extension(b).0);
-    if cmp != Ordering::Equal {
-        return cmp;
-    }
-    // Compare the original strings with the file extensions
-    let cmp = compare_version_sort(a, b);
-    if cmp != Ordering::Equal {
-        return cmp;
-    }
-    // At this point the file extensions are the same, so we compare the full strings.
-    // this helps with cases like a0001 and a1 so that they have a consistent ordering.
-    a.cmp(b)
 }
 
 fn split_extension(s: &str) -> (&str, &str) {
@@ -247,12 +204,14 @@ fn compare_non_digit_seq(a: &str, b: &str) -> Ordering {
 }
 
 fn non_digit_seq(a: &str) -> (&str, &str) {
-    a.bytes().enumerate()
+    a.bytes()
+        .enumerate()
         .find(|(_, c)| c.is_ascii_digit())
         .map_or((a, ""), |(index, _)| a.split_at(index))
 }
 fn digit_seq(a: &str) -> (&str, &str) {
-    a.bytes().enumerate()
+    a.bytes()
+        .enumerate()
         .find(|(_, c)| !c.is_ascii_digit())
         .map_or((a, ""), |(index, _)| a.split_at(index))
 }
@@ -418,7 +377,6 @@ mod test {
         assert_eq!(split_extension(input), split);
     }
 
-
     // This list is pulled from
     // https://github.com/coreutils/gnulib/blob/master/tests/test-filevercmp.c#L26-L102
     #[test]
@@ -517,8 +475,41 @@ mod test {
         let end = list.len();
         for i in 0..end {
             for j in (i + 1)..end {
-                assert_eq!(compare_version_sort(list[i], list[j]), Ordering::Equal);
+                assert_eq!(version_sort_cmp(list[i], list[j]), Ordering::Equal);
             }
         }
     }
 }
+
+/*
+fn original_implementation(a: &str, b: &str) -> Ordering {
+    let mut a_str = a;
+    let mut b_str = b;
+    loop {
+        let (a_non_digit_part, remaining_a) = non_digit_seq(a_str);
+        let (b_non_digit_part, remaining_b) = non_digit_seq(b_str);
+        let cmp = compare_non_digit_seq(a_non_digit_part, b_non_digit_part);
+        if cmp != Ordering::Equal {
+            return cmp;
+        }
+        let (a_digit_part, remaining_a) = digit_seq(remaining_a);
+        let (b_digit_part, remaining_b) = digit_seq(remaining_b);
+
+        // According to the docs, a missing numerical part also counts as zero.
+        let a_digits = a_digit_part.parse::<u64>().unwrap_or_default();
+        let b_digits = b_digit_part.parse::<u64>().unwrap_or_default();
+        let cmp = a_digits.cmp(&b_digits);
+        if cmp != Ordering::Equal {
+            return cmp;
+        }
+
+        a_str = remaining_a;
+        b_str = remaining_b;
+
+        // If any or both strings have been exhausted we can determine the ordering.
+        if a_str.is_empty() && b_str.is_empty() {
+            return Ordering::Equal;
+        }
+    }
+}
+ */

@@ -46,3 +46,9 @@ fn main() {
     println!("{:?}", file_names);
 }
 ```
+
+## TODOs
+
+- [] Remove Regex crate
+- [] Create benchmarks
+- [] Decide on iterator vs non-iterator approach

@@ -9,6 +9,10 @@ pub fn sort(arr: &mut [&str]) {
 
 /// compare implements GNU version-sort.
 pub fn compare(a: &str, b: &str) -> Ordering {
+    // Let's shadow the inputs for easy reference.
+    let mut a = a;
+    let mut b = b;
+
     // The spec says that the following have special priority and sort before
     // all other strings, in the listed order: ("", ".", "..").
     // https://github.com/coreutils/coreutils/blob/master/doc/sort-version.texi#L532-L569
@@ -25,26 +29,25 @@ pub fn compare(a: &str, b: &str) -> Ordering {
         return cmp;
     };
 
+    // Hidden files get priority. If both files are hidden then we remove the leading period
+    // and compare.
     match (a.starts_with('.'), b.starts_with('.')) {
         (true, false) => return Ordering::Less,
         (false, true) => return Ordering::Greater,
+        (false, false) => {},
         (true, true) => {
-            let new_a = if a.len() == 1 { "" } else { &a[1..] };
-            let new_b = if b.len() == 1 { "" } else { &b[1..] };
-            return simple_cmp(new_a, new_b);
+            a = if a.len() == 1 { "" } else { &a[1..] };
+            b = if b.len() == 1 { "" } else { &b[1..] };
         }
-        (false, false) => simple_cmp(a, b)
     }
-}
 
-fn simple_cmp(a: &str, b: &str) -> Ordering {
     // Compare without the file extensions
-    let cmp = version_sort_cmp(split_extension(a).0, split_extension(b).0);
+    let cmp = sequence_cmp(split_extension(a).0, split_extension(b).0);
     if cmp != Ordering::Equal {
         return cmp;
     }
     // Compare the original strings with the file extensions
-    let cmp = version_sort_cmp(a, b);
+    let cmp = sequence_cmp(a, b);
     if cmp != Ordering::Equal {
         return cmp;
     }
@@ -53,8 +56,9 @@ fn simple_cmp(a: &str, b: &str) -> Ordering {
     a.cmp(b)
 }
 
-/// version_sort_cmp will compare two strings using GNU version sort.
-fn version_sort_cmp(a: &str, b: &str) -> Ordering {
+/// sequence_cmp extracts non-digit and digit sequences from the two strings and compares the
+/// sequences until an ordering is determined.
+fn sequence_cmp(a: &str, b: &str) -> Ordering {
     let mut a_iter = VersionSortChunkIterator::new(a);
     let mut b_iter = VersionSortChunkIterator::new(b);
     loop {
@@ -105,6 +109,7 @@ impl<'a> Iterator for VersionSortChunkIterator<'a> {
         let (non_digit_part, out) = non_digit_seq(self.remainder);
         let (digit_part, out) = digit_seq(out);
         // According to the original spec a missing numerical part also counts as zero.
+        // https://github.com/coreutils/coreutils/blob/master/doc/sort-version.texi#L189-L192
         let digits = digit_part.parse::<u64>().unwrap_or_default();
 
         self.remainder = out;
@@ -475,7 +480,7 @@ mod test {
         let end = list.len();
         for i in 0..end {
             for j in (i + 1)..end {
-                assert_eq!(version_sort_cmp(list[i], list[j]), Ordering::Equal);
+                assert_eq!(sequence_cmp(list[i], list[j]), Ordering::Equal);
             }
         }
     }

@@ -57,61 +57,33 @@ pub fn compare(a: &str, b: &str) -> Ordering {
 /// sequence_cmp extracts non-digit and digit sequences from the two strings and compares the
 /// sequences until an ordering is determined.
 fn sequence_cmp(a: &str, b: &str) -> Ordering {
-    let mut a_iter = VersionSortChunkIterator::new(a);
-    let mut b_iter = VersionSortChunkIterator::new(b);
+    let mut a_str = a;
+    let mut b_str = b;
     loop {
-        let a_chunk = a_iter.next();
-        let b_chunk = b_iter.next();
-        // If both are empty they are equal.
-        if a_chunk.is_none() && b_chunk.is_none() {
-            return Ordering::Equal;
-        }
-        // We can't exit early because "~" will beat out the empty string. In this case we
-        // create a default value for each chunk.
-        let (a_str, a_digits) = a_chunk.map_or(("", 0), |a_out| a_out);
-        let (b_str, b_digits) = b_chunk.map_or(("", 0), |b_out| b_out);
-
-        let cmp = compare_non_digit_seq(a_str, b_str);
+        let (a_non_digit_part, remaining_a) = non_digit_seq(a_str);
+        let (b_non_digit_part, remaining_b) = non_digit_seq(b_str);
+        let cmp = compare_non_digit_seq(a_non_digit_part, b_non_digit_part);
         if cmp != Ordering::Equal {
             return cmp;
         }
+        let (a_digit_part, remaining_a) = digit_seq(remaining_a);
+        let (b_digit_part, remaining_b) = digit_seq(remaining_b);
+
+        // According to the docs, a missing numerical part also counts as zero.
+        let a_digits = a_digit_part.parse::<u64>().unwrap_or_default();
+        let b_digits = b_digit_part.parse::<u64>().unwrap_or_default();
         let cmp = a_digits.cmp(&b_digits);
         if cmp != Ordering::Equal {
             return cmp;
         }
-    }
-}
 
-// VersionSortChunkIterator that iterates over a &str and returns a tuple
-// of (&str, u64). Since the version sort algorithm breaks down strings into
-// consecutive non-digit and digit parts, this iterator will return the next
-// relevant sections.
-struct VersionSortChunkIterator<'a> {
-    remainder: &'a str,
-}
+        a_str = remaining_a;
+        b_str = remaining_b;
 
-impl<'a> VersionSortChunkIterator<'a> {
-    fn new(s: &'a str) -> Self {
-        Self { remainder: s }
-    }
-}
-
-// Implement an iterator for VersionSortChunkIterator
-impl<'a> Iterator for VersionSortChunkIterator<'a> {
-    type Item = (&'a str, u64);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.remainder.is_empty() {
-            return None;
+        // If any or both strings have been exhausted we can determine the ordering.
+        if a_str.is_empty() && b_str.is_empty() {
+            return Ordering::Equal;
         }
-        let (non_digit_part, out) = non_digit_seq(self.remainder);
-        let (digit_part, out) = digit_seq(out);
-        // According to the original spec a missing numerical part also counts as zero.
-        // https://github.com/coreutils/coreutils/blob/master/doc/sort-version.texi#L189-L192
-        let digits = digit_part.parse::<u64>().unwrap_or_default();
-
-        self.remainder = out;
-        Some((non_digit_part, digits))
     }
 }
 
@@ -328,16 +300,6 @@ mod test {
     }
 
     #[test]
-    fn test_chunk_iterator() {
-        let mut iter = VersionSortChunkIterator::new("a1b2c3d");
-        assert_eq!(iter.next(), Some(("a", 1)));
-        assert_eq!(iter.next(), Some(("b", 2)));
-        assert_eq!(iter.next(), Some(("c", 3)));
-        assert_eq!(iter.next(), Some(("d", 0)));
-        assert_eq!(iter.next(), None);
-    }
-
-    #[test]
     fn test_missing_number_part() {
         let mut original_list = vec!["file.txt", "file0.txt"];
         sort(&mut original_list);
@@ -524,35 +486,3 @@ mod test {
     }
 }
 
-/*
-fn original_implementation(a: &str, b: &str) -> Ordering {
-    let mut a_str = a;
-    let mut b_str = b;
-    loop {
-        let (a_non_digit_part, remaining_a) = non_digit_seq(a_str);
-        let (b_non_digit_part, remaining_b) = non_digit_seq(b_str);
-        let cmp = compare_non_digit_seq(a_non_digit_part, b_non_digit_part);
-        if cmp != Ordering::Equal {
-            return cmp;
-        }
-        let (a_digit_part, remaining_a) = digit_seq(remaining_a);
-        let (b_digit_part, remaining_b) = digit_seq(remaining_b);
-
-        // According to the docs, a missing numerical part also counts as zero.
-        let a_digits = a_digit_part.parse::<u64>().unwrap_or_default();
-        let b_digits = b_digit_part.parse::<u64>().unwrap_or_default();
-        let cmp = a_digits.cmp(&b_digits);
-        if cmp != Ordering::Equal {
-            return cmp;
-        }
-
-        a_str = remaining_a;
-        b_str = remaining_b;
-
-        // If any or both strings have been exhausted we can determine the ordering.
-        if a_str.is_empty() && b_str.is_empty() {
-            return Ordering::Equal;
-        }
-    }
-}
- */

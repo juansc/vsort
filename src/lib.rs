@@ -1,7 +1,5 @@
 use core::cmp::{Ordering, PartialOrd};
 
-use regex::Regex;
-
 /// sort will sort the given array in place using GNU version sort.
 pub fn sort(arr: &mut [&str]) {
     arr.sort_by(|a, b| compare(a, b));
@@ -117,6 +115,7 @@ impl<'a> Iterator for VersionSortChunkIterator<'a> {
     }
 }
 
+/*
 fn split_extension(s: &str) -> (&str, &str) {
     // According to GNU sort, an extension is defined as a dot, followed by an
     // ASCII letter or tilde, followed by zero or more ASCII letters, digits,
@@ -128,6 +127,43 @@ fn split_extension(s: &str) -> (&str, &str) {
         let (a, b) = s.split_at(m.start());
         (a, b)
     })
+}
+ */
+
+fn split_extension(s: &str) -> (&str, &str) {
+    // According to GNU sort, an extension is defined as a dot, followed by an
+    // ASCII letter or tilde, followed by zero or more ASCII letters, digits,
+    // or tildes; all repeated zero or more times, and ending at string end.
+    // The regex is from https://github.com/coreutils/coreutils/blob/master/doc/sort-version.texi#L584-L591
+    let mut longest_extension : Option<usize> = None;
+    let mut last_char : Option<char> = None;
+   for (i, c) in s.char_indices().rev() {
+       // If we have found a period
+       if c == '.' {
+           match last_char {
+               // We found a period as our last character. Exit with no extension
+               None => {
+                   return (s, "")
+               }
+               Some(prev_char) => {
+                   // If the previous character wasn't alphanumeric this isn't a valid
+                   if prev_char.is_ascii_alphabetic() || prev_char == '~' {
+                       longest_extension = Some(i);
+                   } else {
+                       break
+                   }
+               }
+           }
+       } else if !(c.is_ascii_alphanumeric() || c == '~') {
+          break
+       }
+       // Update the last char for inspection
+       last_char = Some(c);
+   }
+    if longest_extension.is_none() {
+        return (s, "")
+    }
+    s.split_at(longest_extension.unwrap())
 }
 
 #[derive(Eq)]
@@ -378,6 +414,8 @@ mod test {
       "with multiple extensions"
     )]
     #[test_case(".autom4te.cfg", ("", ".autom4te.cfg") ; "empty name with extension")]
+    #[test_case("a.#$%", ("a.#$%", "") ; "no extension present")]
+    #[test_case("a.#$%.txt", ("a.#$%", ".txt") ; "extension stops at non-alphanumeric characters")]
     fn test_split_extension(input: &str, split: (&str, &str)) {
         assert_eq!(split_extension(input), split);
     }

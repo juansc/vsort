@@ -1,6 +1,6 @@
-use criterion::{Criterion, criterion_group, criterion_main};
-use rand::thread_rng;
+use criterion::{criterion_group, criterion_main, Criterion};
 use rand::seq::SliceRandom;
+use rand::thread_rng;
 
 fn bench_version_sort() {
     let expected = vec![

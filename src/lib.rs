@@ -32,7 +32,7 @@ pub fn compare(a: &str, b: &str) -> Ordering {
     match (a.starts_with('.'), b.starts_with('.')) {
         (true, false) => return Ordering::Less,
         (false, true) => return Ordering::Greater,
-        (false, false) => {},
+        (false, false) => {}
         (true, true) => {
             a = if a.len() == 1 { "" } else { &a[1..] };
             b = if b.len() == 1 { "" } else { &b[1..] };
@@ -107,35 +107,31 @@ fn split_extension(s: &str) -> (&str, &str) {
     // ASCII letter or tilde, followed by zero or more ASCII letters, digits,
     // or tildes; all repeated zero or more times, and ending at string end.
     // The regex is from https://github.com/coreutils/coreutils/blob/master/doc/sort-version.texi#L584-L591
-    let mut longest_extension : Option<usize> = None;
-    let mut last_char : Option<char> = None;
-   for (i, c) in s.char_indices().rev() {
-       // If we have found a period
-       if c == '.' {
-           match last_char {
-               // We found a period as our last character. Exit with no extension
-               None => {
-                   return (s, "")
-               }
-               Some(prev_char) => {
-                   // If the previous character wasn't alphanumeric this isn't a valid
-                   if prev_char.is_ascii_alphabetic() || prev_char == '~' {
-                       longest_extension = Some(i);
-                   } else {
-                       break
-                   }
-               }
-           }
-       } else if !(c.is_ascii_alphanumeric() || c == '~') {
-          break
-       }
-       // Update the last char for inspection
-       last_char = Some(c);
-   }
-    if longest_extension.is_none() {
-        return (s, "")
+    let mut split_ind: Option<usize> = None;
+    let mut last_char: Option<char> = None;
+    for (i, c) in s.char_indices().rev() {
+        // If we have found a period
+        if c == '.' {
+            match last_char {
+                // We found a period as our last character. Exit with no extension
+                None => return (s, ""),
+                Some(prev_char) => {
+                    // If the previous character wasn't alphanumeric this isn't a valid
+                    if prev_char.is_ascii_alphabetic() || prev_char == '~' {
+                        split_ind = Some(i);
+                    } else {
+                        break;
+                    }
+                }
+            }
+        } else if !(c.is_ascii_alphanumeric() || c == '~') {
+            break;
+        }
+        // Update the last char for inspection
+        last_char = Some(c);
     }
-    s.split_at(longest_extension.unwrap())
+
+    split_ind.map_or((s, ""), |ind| s.split_at(ind))
 }
 
 #[derive(Eq)]
@@ -485,4 +481,3 @@ mod test {
         }
     }
 }
-

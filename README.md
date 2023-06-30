@@ -53,6 +53,5 @@ fn main() {
 ## TODOs
 - [ ] Add examples of code usages in each public function doc
 - [ ] Add installation instructions
-- [ ] Remove Regex crate
 - [ ] Create benchmarks
 - [ ] Decide on iterator vs non-iterator approach

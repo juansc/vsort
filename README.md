@@ -1,3 +1,5 @@
+[![TESTS](https://github.com/juansc/vsort/actions/workflows/rust.yml/badge.svg)](https://github.com/juansc/vsort/actions)
+ [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 # vsort
 
 A Rust library that implements the GNU version sort algorithm. It follows the spec
@@ -53,3 +55,4 @@ fn main() {
 ## TODOs
 - [ ] Add examples of code usages in each public function doc
 - [ ] Add installation instructions
+

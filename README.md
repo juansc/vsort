@@ -1,5 +1,7 @@
 [![TESTS](https://github.com/juansc/vsort/actions/workflows/rust.yml/badge.svg)](https://github.com/juansc/vsort/actions)
  [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Latest version](https://img.shields.io/crates/v/vsort.svg)](https://crates.io/crates/vsort)
+
 # vsort
 
 A Rust library that implements the GNU version sort algorithm. It follows the spec

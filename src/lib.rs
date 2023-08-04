@@ -1,11 +1,54 @@
 use core::cmp::{Ordering, PartialOrd};
 
 /// sort will sort the given array in place using GNU version sort.
+/// # Examples
+/// ```
+/// use vsort::sort;
+///
+/// fn main() {
+///     let mut file_names = vec![
+///        "a.txt",
+///        "b 1.txt",
+///        "b 10.txt",
+///        "b 11.txt",
+///        "b 5.txt",
+///        "Ssm.txt",
+///     ];
+///
+///     sort( & mut file_names);
+///     assert_eq!(
+///         file_names,
+///         vec!["Ssm.txt", "a.txt", "b 1.txt", "b 5.txt", "b 10.txt", "b 11.txt"]
+///     );
+/// }
+/// ```
 pub fn sort(arr: &mut [&str]) {
     arr.sort_by(|a, b| compare(a, b));
 }
 
-/// compare implements GNU version-sort.
+/// compare implements GNU version sort.
+/// # Examples
+/// ```
+/// use vsort::compare;
+///
+/// fn main() {
+///     let mut file_names = vec![
+///         "a.txt",
+///         "b 1.txt",
+///         "b 10.txt",
+///         "b 11.txt",
+///         "b 5.txt",
+///         "Ssm.txt",
+///     ];
+///
+///     // Pass to sort_by
+///     file_names.sort_by(|a, b| compare(a, b));
+///     assert_eq!(
+///         file_names,
+///         vec!["Ssm.txt", "a.txt", "b 1.txt", "b 5.txt", "b 10.txt", "b 11.txt"]
+///     );
+/// }
+/// ```
 pub fn compare(a: &str, b: &str) -> Ordering {
     // Let's shadow the inputs for easy reference.
     let mut a = a;
@@ -218,6 +261,7 @@ fn non_digit_seq(a: &str) -> (&str, &str) {
         .find(|(_, c)| c.is_ascii_digit())
         .map_or((a, ""), |(index, _)| a.split_at(index))
 }
+
 fn digit_seq(a: &str) -> (&str, &str) {
     a.bytes()
         .enumerate()
@@ -231,8 +275,8 @@ mod test {
 
     use super::*;
 
-    #[test_case(vec!["", "~"], vec!["", "~"] ; "in sorted order")]
-    #[test_case(vec!["~", ""], vec!["", "~"] ; "in reversed order")]
+    #[test_case(vec!["", "~"], vec!["", "~"]; "in sorted order")]
+    #[test_case(vec!["~", ""], vec!["", "~"]; "in reversed order")]
     fn test_empty_string_vs_tilde(original: Vec<&str>, expected: Vec<&str>) {
         let mut list = original;
         sort(&mut list);
@@ -286,7 +330,7 @@ mod test {
     // This tests that the implementation can handle characters that are longer than a single byte.
     #[test_case(
       vec!["αβγ2.txt", "αβγ1.txt", "1αβγ.txt", "2αβγ.txt"],
-      vec!["1αβγ.txt", "2αβγ.txt", "αβγ1.txt", "αβγ2.txt"] ;
+      vec!["1αβγ.txt", "2αβγ.txt", "αβγ1.txt", "αβγ2.txt"];
       "test_with_non_ascii"
     )]
     fn test_with_non_utf8(original: Vec<&str>, expected: Vec<&str>) {
@@ -300,12 +344,12 @@ mod test {
         let mut original_list = vec!["file.txt", "file0.txt"];
         sort(&mut original_list);
 
-        assert_eq!(original_list, vec!["file0.txt", "file.txt"],);
+        assert_eq!(original_list, vec!["file0.txt", "file.txt"]);
 
         let mut original_list = vec!["file0.txt", "file.txt"];
         sort(&mut original_list);
 
-        assert_eq!(original_list, vec!["file0.txt", "file.txt"],);
+        assert_eq!(original_list, vec!["file0.txt", "file.txt"]);
     }
 
     // Coreutils Tests
@@ -315,43 +359,43 @@ mod test {
     // https://github.com/coreutils/coreutils/blob/master/doc/sort-version.texi#L265-L285
     #[test_case(
       vec!["8.10", "8.5", "8.1", "8.01", "8.010", "8.100", "8.49"],
-      vec!["8.01", "8.1", "8.5", "8.010", "8.10", "8.49", "8.100"] ;
+      vec!["8.01", "8.1", "8.5", "8.010", "8.10", "8.49", "8.100"];
       "sort with numbers"
     )]
     // https://github.com/coreutils/coreutils/blob/master/doc/sort-version.texi#L316-L335
     #[test_case(
       vec!["1.0_src.tar.gz", "1.0.5_src.tar.gz"],
-      vec!["1.0.5_src.tar.gz", "1.0_src.tar.gz"] ;
+      vec!["1.0.5_src.tar.gz", "1.0_src.tar.gz"];
       "period is before underscore"
     )]
     // https://github.com/coreutils/coreutils/blob/master/doc/sort-version.texi#L353-L363
     #[test_case(
       vec!["3.0/", "3.0.5"],
-      vec!["3.0.5", "3.0/"] ;
+      vec!["3.0.5", "3.0/"];
       "period is before forward slash"
     )]
     // https://github.com/coreutils/coreutils/blob/master/doc/sort-version.texi#L372-L379
     #[test_case(
       vec!["a%", "az"],
-      vec!["az", "a%"] ;
+      vec!["az", "a%"];
       "letters before non-letters"
     )]
     // https://github.com/coreutils/coreutils/blob/master/doc/sort-version.texi#L400-L413
     #[test_case(
       vec!["1", "1%", "1.2", "1~", "~"],
-      vec!["~", "1~", "1", "1%", "1.2"] ;
+      vec!["~", "1~", "1", "1%", "1.2"];
       "tilde before all others strings"
     )]
     // https://github.com/coreutils/coreutils/blob/master/doc/sort-version.texi#L451-L456
     #[test_case(
       vec!["aa", "az", "a%", "aα"],
-      vec!["aa", "az", "a%", "aα"] ;
+      vec!["aa", "az", "a%", "aα"];
       "sort ignores locale"
     )]
     // https://github.com/coreutils/coreutils/blob/master/doc/sort-version.texi#L551-L560
     #[test_case(
       vec!["a", "b", ".", "c", "..", ".d20", ".d3"],
-      vec![".", "..", ".d3", ".d20", "a", "b", "c"] ;
+      vec![".", "..", ".d3", ".d20", "a", "b", "c"];
       "special directories and hidden files are sorted first"
     )]
     fn test_basic_tests(original: Vec<&str>, expected: Vec<&str>) {
@@ -361,19 +405,19 @@ mod test {
     }
 
     // Examples from https://github.com/coreutils/coreutils/blob/master/doc/sort-version.texi#L608-L634
-    #[test_case("hello-8.txt",  ("hello-8", ".txt") ; "basic")]
-    #[test_case("hello-8.2.txt",  ("hello-8.2", ".txt") ; "with major and minor")]
-    #[test_case("hello-8.0.12.tar.gz", ("hello-8.0.12", ".tar.gz") ; "with extension")]
-    #[test_case("hello-8.2",  ("hello-8.2", "") ; "without extension")]
-    #[test_case("hello.foobar65", ("hello", ".foobar65") ; "with long extension")]
+    #[test_case("hello-8.txt", ("hello-8", ".txt"); "basic")]
+    #[test_case("hello-8.2.txt", ("hello-8.2", ".txt"); "with major and minor")]
+    #[test_case("hello-8.0.12.tar.gz", ("hello-8.0.12", ".tar.gz"); "with extension")]
+    #[test_case("hello-8.2", ("hello-8.2", ""); "without extension")]
+    #[test_case("hello.foobar65", ("hello", ".foobar65"); "with long extension")]
     #[test_case(
       "gcc-c++-10.8.12-0.7rc2.fc9.tar.bz2",
-      ("gcc-c++-10.8.12-0.7rc2", ".fc9.tar.bz2") ;
+      ("gcc-c++-10.8.12-0.7rc2", ".fc9.tar.bz2");
       "with multiple extensions"
     )]
-    #[test_case(".autom4te.cfg", ("", ".autom4te.cfg") ; "empty name with extension")]
-    #[test_case("a.#$%", ("a.#$%", "") ; "no extension present")]
-    #[test_case("a.#$%.txt", ("a.#$%", ".txt") ; "extension stops at non-alphanumeric characters")]
+    #[test_case(".autom4te.cfg", ("", ".autom4te.cfg"); "empty name with extension")]
+    #[test_case("a.#$%", ("a.#$%", ""); "no extension present")]
+    #[test_case("a.#$%.txt", ("a.#$%", ".txt"); "extension stops at non-alphanumeric characters")]
     fn test_split_extension(input: &str, split: (&str, &str)) {
         assert_eq!(split_extension(input), split);
     }
@@ -465,13 +509,13 @@ mod test {
 
     // These tests are lifted from
     // https://github.com/coreutils/gnulib/blob/master/tests/test-filevercmp.c
-    #[test_case(vec!["a", "a0", "a0000"] ; "zeros are the same as empty string")]
-    #[test_case(vec!["a\u{1}c-27.txt", "a\u{1}c-027.txt", "a\u{1}c-00000000000000000000000000000000000000000000000000000027.txt",] ; "non-ascii")]
-    #[test_case(vec![".a\u{1}c-27.txt", ".a\u{1}c-027.txt", ".a\u{1}c-00000000000000000000000000000000000000000000000000000027.txt",] ; "non-ascii with leading period")]
-    #[test_case(vec!["a\u{1}c-", "a\u{1}c-0", "a\u{1}c-00",] ; "non-ascii without extension")]
-    #[test_case(vec![".a\u{1}c-", ".a\u{1}c-0", ".a\u{1}c-00",] ; "non-ascii without extension and leading period")]
-    #[test_case(vec!["a\u{1}c-0.txt", "a\u{1}c-00.txt"] ; "non-ascii with trailing zeros")]
-    #[test_case(vec![".a\u{1}c-1\u{1}.txt", ".a\u{1}c-001\u{1}.txt"] ; "non-ascii with leading zeros before a number")]
+    #[test_case(vec!["a", "a0", "a0000"]; "zeros are the same as empty string")]
+    #[test_case(vec!["a\u{1}c-27.txt", "a\u{1}c-027.txt", "a\u{1}c-00000000000000000000000000000000000000000000000000000027.txt",]; "non-ascii")]
+    #[test_case(vec![".a\u{1}c-27.txt", ".a\u{1}c-027.txt", ".a\u{1}c-00000000000000000000000000000000000000000000000000000027.txt",]; "non-ascii with leading period")]
+    #[test_case(vec!["a\u{1}c-", "a\u{1}c-0", "a\u{1}c-00",]; "non-ascii without extension")]
+    #[test_case(vec![".a\u{1}c-", ".a\u{1}c-0", ".a\u{1}c-00",]; "non-ascii without extension and leading period")]
+    #[test_case(vec!["a\u{1}c-0.txt", "a\u{1}c-00.txt"]; "non-ascii with trailing zeros")]
+    #[test_case(vec![".a\u{1}c-1\u{1}.txt", ".a\u{1}c-001\u{1}.txt"]; "non-ascii with leading zeros before a number")]
     fn test_strings_cmp_equal(list: Vec<&str>) {
         let end = list.len();
         for i in 0..end {
